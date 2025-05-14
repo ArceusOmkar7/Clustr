@@ -12,7 +12,7 @@ const Navbar = () => {
   ];
 
   return (
-    <nav className="w-full flex items-center justify-between p-4 bg-card">
+    <nav className="w-full flex items-center justify-between p-4 px-7 bg-card rounded-2xl">
       <span className="font-bold text-xl">CLUSTR</span>
       <div className="flex items-center justify-between gap-4">
         {navLinks.map((link) => (

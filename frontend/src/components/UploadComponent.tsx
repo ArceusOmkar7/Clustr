@@ -1,6 +1,5 @@
-import React, { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
-import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
@@ -14,10 +13,10 @@ import {
 import { toast } from "sonner";
 import { UploadCloud, XCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { type UploadableFile } from "../types";
+import { useImageUpload } from "../hooks/useImageUpload";
 
 interface ImageUploaderProps {
   onUploadComplete: (uploadedFiles: UploadableFile[]) => void;
-  backendUrl: string;
 }
 
 const MAX_FILES = 10;
@@ -29,11 +28,9 @@ const ACCEPTED_IMAGE_TYPES = {
   "image/webp": [],
 };
 
-export function UploadComponent({
-  onUploadComplete,
-  backendUrl,
-}: ImageUploaderProps) {
+export function UploadComponent({ onUploadComplete }: ImageUploaderProps) {
   const [files, setFiles] = useState<UploadableFile[]>([]);
+  const { uploadFiles, isUploading, uploadProgress } = useImageUpload();
 
   // Handle file drop
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
@@ -75,14 +72,7 @@ export function UploadComponent({
     multiple: true,
   });
 
-  // Update file progress
-  const updateFile = (id: string, updates: Partial<UploadableFile>) => {
-    setFiles((prev) =>
-      prev.map((file) => (file.id === id ? { ...file, ...updates } : file))
-    );
-  };
-
-  // Upload files
+  // Upload files using the service
   const handleUpload = async () => {
     const pendingFiles = files.filter((file) => file.status === "pending");
 
@@ -91,51 +81,28 @@ export function UploadComponent({
       return;
     }
 
-    let successful = true;
+    try {
+      const updatedFiles = await uploadFiles(files);
+      setFiles(updatedFiles);
+      onUploadComplete(updatedFiles);
 
-    for (const file of pendingFiles) {
-      updateFile(file.id, { progress: 0, status: "uploading" });
+      const successCount = updatedFiles.filter(
+        (f) => f.status === "success"
+      ).length;
+      const errorCount = updatedFiles.filter(
+        (f) => f.status === "error"
+      ).length;
 
-      const formData = new FormData();
-      formData.append("files", file.file);
-
-      try {
-        const response = await axios.post(backendUrl, formData, {
-          onUploadProgress: (event) => {
-            const percent = event.total
-              ? Math.round((event.loaded * 100) / event.total)
-              : 0;
-            updateFile(file.id, { progress: percent });
-          },
-        });
-
-        const uploadedInfo = response.data.data[0];
-        updateFile(file.id, {
-          progress: 100,
-          status: "success",
-          uploadedPath: uploadedInfo.preview_url,
-        });
-      } catch (error) {
-        console.error("Upload error:", file.file.name, error);
-        const errorMessage =
-          axios.isAxiosError(error) && error.response?.data?.detail
-            ? error.response.data.detail
-            : "Upload failed. Please try again.";
-
-        updateFile(file.id, { status: "error", error: errorMessage as string });
-        toast.error(`Upload Failed: ${file.file.name}`, {
-          description: errorMessage as string,
-        });
-        successful = false;
+      if (errorCount === 0) {
+        toast.success("All files uploaded successfully!");
+      } else if (successCount > 0) {
+        toast.warning(`${successCount} files uploaded, ${errorCount} failed.`);
+      } else {
+        toast.error("All uploads failed.");
       }
-    }
-
-    onUploadComplete(files);
-
-    if (successful && pendingFiles.length > 0) {
-      toast.success("All files uploaded successfully!");
-    } else if (pendingFiles.length > 0) {
-      toast.warning("Some files failed to upload.");
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Upload failed. Please try again.");
     }
   };
 
@@ -205,7 +172,10 @@ export function UploadComponent({
                     {(file.file.size / 1024 / 1024).toFixed(2)} MB
                   </p>
                   {file.status === "uploading" && (
-                    <Progress value={file.progress} className="h-2 mt-1" />
+                    <Progress
+                      value={uploadProgress[file.id] || file.progress}
+                      className="h-2 mt-1"
+                    />
                   )}
                   {file.status === "error" && (
                     <p className="text-xs text-destructive mt-1">
@@ -243,12 +213,14 @@ export function UploadComponent({
             ))}
             <Button
               onClick={handleUpload}
-              disabled={files.every(
-                (f) => f.status === "uploading" || f.status === "success"
-              )}
+              disabled={
+                files.every(
+                  (f) => f.status === "uploading" || f.status === "success"
+                ) || isUploading
+              }
               className="w-full"
             >
-              {files.some((f) => f.status === "uploading") && (
+              {(files.some((f) => f.status === "uploading") || isUploading) && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Upload {files.filter((f) => f.status === "pending").length}{" "}

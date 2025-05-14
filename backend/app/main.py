@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.routers import base, upload
 from app.config import settings
 from pathlib import Path
@@ -17,6 +18,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount the uploads directory to serve static files
+app.mount(settings.UPLOAD_URL_PATH, StaticFiles(
+    directory=settings.UPLOAD_FOLDER), name="uploads")
 
 # Include routers
 app.include_router(base.router)

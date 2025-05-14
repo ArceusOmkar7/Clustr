@@ -25,8 +25,8 @@ async def upload_files_service(files: List[UploadFile]) -> UploadSuccess:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Create a preview URL (can be customized as needed)
-        preview_url = f"/uploads/{filename}"
+        # Create a fully qualified preview URL
+        preview_url = f"{settings.BASE_URL}{settings.UPLOAD_URL_PATH}/{filename}"
 
         uploaded_files.append(UploadResponse(
             stored_filename=filename,

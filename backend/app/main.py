@@ -6,23 +6,32 @@ from app.config import settings
 from pathlib import Path
 
 # Create uploads directory if it doesn't exist
+# This ensures the application has a place to store uploaded files
 Path(settings.UPLOAD_FOLDER).mkdir(parents=True, exist_ok=True)
 
+# Initialize the FastAPI application with metadata that appears in the docs
 app = FastAPI(title="Clustr API", version="1.0.0")
 
-# Enable CORS
+# Enable Cross-Origin Resource Sharing (CORS)
+# This allows the frontend (running on a different domain/port) to communicate with the API
+# In production, you would restrict this to specific origins instead of "*"
 app.add_middleware(
     CORSMiddleware,
+    # Allow requests from any origin (not secure for production)
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True,  # Allow cookies to be included in requests
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers in requests
 )
 
 # Mount the uploads directory to serve static files
+# This makes uploaded files accessible via HTTP at the specified URL path
+# For example, a file "image.jpg" will be available at "/uploads/image.jpg"
 app.mount(settings.UPLOAD_URL_PATH, StaticFiles(
     directory=settings.UPLOAD_FOLDER), name="uploads")
 
-# Include routers
+# Include routers to organize API endpoints
+# base router: Basic endpoints like health check ("/")
+# upload router: File upload endpoints ("/api/upload")
 app.include_router(base.router)
 app.include_router(upload.router, prefix="/api")

@@ -1,15 +1,20 @@
 from pydantic_settings import BaseSettings
 import os
+from typing import Set
 
 
 class Settings(BaseSettings):
     """
     Application configuration settings.
 
-    Using Pydantic's BaseSettings allows:
-    1. Environment variable overrides (set HOST=0.0.0.0 to change the host)
-    2. Type validation (PORT must be an integer)
-    3. Default values if not specified elsewhere
+    Pydantic's BaseSettings automatically loads values from environment variables.
+    The values defined here are just defaults used when the corresponding
+    environment variables are not set.
+
+    Environment variables take precedence in this order:
+    1. Actual environment variables (set in the OS)
+    2. Variables from .env file
+    3. Default values defined here
     """
 
     # Use absolute path for uploads - calculates the parent directory of the current file
@@ -20,15 +25,20 @@ class Settings(BaseSettings):
 
     # File extensions that are allowed to be uploaded
     # Security: restricts uploads to only image files with these extensions
-    ALLOWED_EXTENSIONS: set = {'png', 'jpg', 'jpeg', 'webp'}
+    ALLOWED_EXTENSIONS: Set[str] = {'png', 'jpg', 'jpeg', 'webp'}
 
-    # Server configuration
-    HOST: str = "127.0.0.1"  # Default to localhost
-    PORT: int = 5000         # Default port for the server
-    RELOAD: bool = True      # Auto-reload on code changes (for development)
+    # Server configuration (will be overridden by environment variables if set)
+    HOST: str = "127.0.0.1"
+    PORT: int = 5000
+    RELOAD: bool = True
 
-    # URL path where uploads can be accessed, e.g., http://127.0.0.1:5000/uploads/image.jpg
+    # URL path where uploads can be accessed
     UPLOAD_URL_PATH: str = "/uploads"
+
+    # MongoDB configuration (will be overridden by environment variables if set)
+    MONGODB_URL: str = "mongodb://localhost:27017"
+    MONGODB_DATABASE: str = "clustr"
+    MONGODB_UPLOADS_COLLECTION: str = "uploads"
 
     @property
     def BASE_URL(self) -> str:
@@ -38,6 +48,16 @@ class Settings(BaseSettings):
         """
         return f"http://{self.HOST}:{self.PORT}"
 
+    class Config:
+        # Load .env file from the backend directory
+        env_file = os.path.join(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))), ".env")
+        env_file_encoding = "utf-8"
+
+        # Allow environment variables to be case-insensitive
+        case_sensitive = False
+
 
 # Create a global settings instance that can be imported throughout the application
+# This will automatically load values from environment variables and .env file
 settings = Settings()

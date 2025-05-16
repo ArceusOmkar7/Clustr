@@ -3,7 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.routers import base, upload
 from app.config import settings
+from app.db.mongodb import init_mongodb
 from pathlib import Path
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # Create uploads directory if it doesn't exist
 # This ensures the application has a place to store uploaded files
@@ -11,6 +20,20 @@ Path(settings.UPLOAD_FOLDER).mkdir(parents=True, exist_ok=True)
 
 # Initialize the FastAPI application with metadata that appears in the docs
 app = FastAPI(title="Clustr API", version="1.0.0")
+
+# Initialize MongoDB
+logger.info("Initializing MongoDB connection...")
+try:
+    mongodb_success = init_mongodb()
+    if mongodb_success:
+        logger.info("MongoDB connection successful")
+    else:
+        logger.warning(
+            "Failed to connect to MongoDB - application will run with limited functionality")
+except Exception as e:
+    logger.error(f"Error initializing MongoDB: {str(e)}")
+    logger.warning(
+        "Application will run with limited functionality (no metadata storage)")
 
 # Enable Cross-Origin Resource Sharing (CORS)
 # This allows the frontend (running on a different domain/port) to communicate with the API

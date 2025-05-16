@@ -1,7 +1,8 @@
 from fastapi import APIRouter, File, UploadFile
-from typing import List
+from typing import List, Dict, Any
 from app.services.upload_service import upload_files_service
 from app.models.upload_models import UploadSuccess
+from app.services.mongodb_service import mongodb_service
 
 # Create a router for upload-related endpoints
 router = APIRouter()
@@ -24,3 +25,32 @@ async def upload_files(files: List[UploadFile] = File(...)):
     keeping the router focused on defining the API structure instead of implementation details.
     """
     return await upload_files_service(files)
+
+
+@router.get("/uploads", response_model=List[Dict[str, Any]])
+async def get_all_uploads():
+    """
+    Get all uploads from the database.
+
+    Returns:
+    - List[Dict]: A list of all upload metadata objects from the database
+    """
+    return mongodb_service.get_all_uploads()
+
+
+@router.get("/uploads/{file_id}", response_model=Dict[str, Any])
+async def get_upload(file_id: str):
+    """
+    Get a specific upload by ID.
+
+    Parameters:
+    - file_id: The ID of the upload to retrieve
+
+    Returns:
+    - Dict: The upload metadata
+    """
+    metadata = mongodb_service.get_upload_metadata(file_id)
+    if metadata is None:
+        # If the file doesn't exist, FastAPI will automatically return a 404 response
+        return {"error": "File not found"}
+    return metadata

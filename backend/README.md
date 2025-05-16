@@ -150,6 +150,11 @@ RELOAD=False  # Disable auto-reload in production
 
 # Storage settings
 UPLOAD_FOLDER=/path/to/custom/storage
+
+# MongoDB configuration
+MONGODB_URL=mongodb://localhost:27017
+MONGODB_DATABASE=clustr
+MONGODB_UPLOADS_COLLECTION=uploads
 ```
 
 ## File Upload Service Implementation
@@ -308,4 +313,22 @@ Potential improvements for the application:
 3. Image processing (resizing, optimization)
 4. Asynchronous processing for large files
 5. Cloud storage integration
-6. File deletion and management APIs 
+6. File deletion and management APIs
+
+## MongoDB Setup
+
+This application uses MongoDB to store metadata about uploaded files. Make sure you have MongoDB installed and running on your system.
+
+### Installing MongoDB
+
+- **Windows**: Download and install from [MongoDB website](https://www.mongodb.com/try/download/community)
+- **macOS**: `brew install mongodb-community`
+- **Linux**: Refer to your distribution's package manager
+
+### Running MongoDB
+
+- **Windows**: MongoDB should run as a service after installation
+- **macOS**: `brew services start mongodb-community`
+- **Linux**: `sudo systemctl start mongod`
+
+The application will automatically create the necessary database and collections on startup. 

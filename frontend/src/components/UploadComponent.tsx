@@ -22,10 +22,11 @@ interface ImageUploaderProps {
 const MAX_FILES = 10;
 const MAX_SIZE_MB = 5;
 const ACCEPTED_IMAGE_TYPES = {
-  "image/jpeg": [],
-  "image/png": [],
-  "image/gif": [],
-  "image/webp": [],
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/webp": [".webp"],
+  "image/bmp": [".bmp"],
+  "image/tiff": [".tiff", ".tif"],
 };
 
 export function UploadComponent({ onUploadComplete }: ImageUploaderProps) {

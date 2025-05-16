@@ -25,7 +25,9 @@ class Settings(BaseSettings):
 
     # File extensions that are allowed to be uploaded
     # Security: restricts uploads to only image files with these extensions
-    ALLOWED_EXTENSIONS: Set[str] = {'png', 'jpg', 'jpeg', 'webp'}
+    ALLOWED_EXTENSIONS: Set[str] = {
+        'png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff', 'tif'
+    }
 
     # Server configuration (will be overridden by environment variables if set)
     HOST: str = "127.0.0.1"

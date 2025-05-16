@@ -67,7 +67,12 @@ async def upload_files_service(files: List[UploadFile]) -> UploadSuccess:
         preview_url = f"{settings.BASE_URL}{settings.UPLOAD_URL_PATH}/{filename}"
 
         # Get image dimensions
-        dimensions = get_image_dimensions(file_path)
+        try:
+            dimensions = get_image_dimensions(file_path)
+            logger.info(f"Image dimensions for {filename}: {dimensions}")
+        except Exception as e:
+            logger.error(f"Failed to get image dimensions: {str(e)}")
+            dimensions = {"width": 0, "height": 0}
 
         # Create metadata for MongoDB
         upload_metadata = {

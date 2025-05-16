@@ -29,10 +29,7 @@ class DBUploadModel(BaseModel):
     url: str
     upload_time: date
     size: int
-    dimensions: dict = {
-        "width": int,
-        "height": int
-    }
+    dimensions: dict
     status: str  # pending/processed/error
     caption: Optional[str] = None
     tags: List[str] = []

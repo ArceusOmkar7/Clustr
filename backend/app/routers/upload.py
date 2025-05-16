@@ -1,8 +1,11 @@
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, UploadFile, Form
 from typing import List, Dict, Any
 from app.services.upload_service import upload_files_service
 from app.models.upload_models import UploadSuccess
 from app.services.mongodb_service import mongodb_service
+from app.utils.image_utils import get_image_dimensions
+import os
+from app.config import settings
 
 # Create a router for upload-related endpoints
 router = APIRouter()
@@ -54,3 +57,48 @@ async def get_upload(file_id: str):
         # If the file doesn't exist, FastAPI will automatically return a 404 response
         return {"error": "File not found"}
     return metadata
+
+
+@router.get("/debug/dimensions")
+async def debug_dimensions():
+    """
+    Debug endpoint to check image dimensions functionality.
+
+    Returns:
+    - Dict with debug information
+    """
+    results = []
+
+    # Try to get dimensions for some sample files in the uploads folder
+    upload_dir = settings.UPLOAD_FOLDER
+    try:
+        files = os.listdir(upload_dir)
+        for file in files[:5]:  # Limit to 5 files to avoid huge responses
+            file_path = os.path.join(upload_dir, file)
+            if os.path.isfile(file_path):
+                try:
+                    dimensions = get_image_dimensions(file_path)
+                    results.append({
+                        "file": file,
+                        "path": file_path,
+                        "exists": True,
+                        "dimensions": dimensions,
+                        "success": dimensions["width"] > 0 and dimensions["height"] > 0
+                    })
+                except Exception as e:
+                    results.append({
+                        "file": file,
+                        "path": file_path,
+                        "exists": True,
+                        "error": str(e)
+                    })
+    except Exception as e:
+        return {"error": str(e)}
+
+    return {
+        "uploads_folder": upload_dir,
+        "folder_exists": os.path.exists(upload_dir),
+        "file_count": len(os.listdir(upload_dir) if os.path.exists(upload_dir) else []),
+        "results": results,
+        "note": "If you're seeing zeros for AVIF dimensions, run 'pip install pillow-avif-plugin' and restart the server."
+    }

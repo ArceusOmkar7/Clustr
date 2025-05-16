@@ -4,3 +4,5 @@ backend/.env
 backend/venv/
 backend/uploads/
 .env
+uploads/
+blip_container/uploads/

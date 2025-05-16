@@ -10,6 +10,8 @@ This is the backend API for the Clustr application, built with FastAPI. It provi
 - **Python 3.8+**: Modern Python features including type hints and async/await syntax
 - **python-multipart**: Library for handling file uploads with multipart/form-data
 - **python-dotenv**: For environment-based configuration
+- **MongoDB**: NoSQL database for storing metadata about uploaded files
+- **Pillow**: Python Imaging Library for processing image files and extracting metadata
 
 ## Project Structure
 
@@ -19,6 +21,9 @@ backend/
 │   ├── __init__.py          # Package initialization
 │   ├── config.py            # Application configuration settings
 │   ├── main.py              # FastAPI application setup and entry point
+│   ├── db/                  # Database connection modules
+│   │   ├── __init__.py
+│   │   └── mongodb.py       # MongoDB initialization and connection
 │   ├── models/              # Pydantic models for request/response data
 │   │   ├── __init__.py
 │   │   └── upload_models.py # Models for file upload functionality
@@ -28,10 +33,12 @@ backend/
 │   │   └── upload.py        # File upload routes
 │   ├── services/            # Business logic implementation
 │   │   ├── __init__.py
-│   │   └── upload_service.py # Upload service implementation
+│   │   ├── mongodb_service.py # MongoDB service implementation
+│   │   └── upload_service.py  # Upload service implementation
 │   └── utils/               # Helper functions
 │       ├── __init__.py
-│       └── helpers.py       # Utility functions (file validation, error handling)
+│       ├── helpers.py       # Utility functions (file validation, error handling)
+│       └── image_utils.py   # Image processing utilities (dimensions extraction)
 ├── uploads/                 # Directory for storing uploaded files
 ├── requirements.txt         # Project dependencies
 └── run.py                   # Entry point to run the application
@@ -54,17 +61,35 @@ The application uses Pydantic models for request and response validation:
   - `message`: Success message
   - `data`: List of UploadResponse objects for each uploaded file
 
+- **DBUploadModel**: Model for storing file metadata in MongoDB
+  - `id`: Unique identifier for the file
+  - `original_name`: Original filename
+  - `filename`: Stored filename
+  - `file_path`: Local path where the file is stored
+  - `url`: Complete URL to access the file
+  - `upload_time`: When the file was uploaded
+  - `size`: File size in bytes
+  - `dimensions`: Image dimensions (width and height)
+  - `status`: Processing status (pending/processed/error)
+  - `caption`: Optional caption for the image
+  - `tags`: List of tags associated with the image
+  - `faces`: Information about detected faces
+  - `face_cluster_ids`: IDs of face clusters
+
 ### Routers (app/routers/)
 
 The API is organized into logical router modules:
 
 - **base.py**: Basic routes for health checks and application status
-  - `GET /`: Simple health check endpoint returning a "Hello World" message
+  - `GET /`: Health check endpoint returning server status and database connectivity
 
 - **upload.py**: File upload functionality
   - `POST /api/upload`: Endpoint for uploading one or more files
     - Accepts multipart/form-data with one or more files
     - Returns UploadSuccess with metadata about uploaded files
+  - `GET /api/uploads`: Retrieves metadata for all uploaded files
+  - `GET /api/uploads/{file_id}`: Retrieves metadata for a specific file
+  - `GET /api/debug/dimensions`: Debug endpoint to check image dimension extraction
 
 ### Services (app/services/)
 
@@ -73,8 +98,14 @@ Service modules contain the business logic:
 - **upload_service.py**: Handles file upload processing
   - Validates file types against allowed extensions
   - Securely saves files to the upload directory
+  - Extracts image dimensions
+  - Stores metadata in MongoDB
   - Generates preview URLs
   - Returns structured metadata about the uploaded files
+
+- **mongodb_service.py**: Handles database operations
+  - Provides methods to save, retrieve, and query file metadata
+  - Error handling for database operations
 
 ### Utils (app/utils/)
 
@@ -84,12 +115,15 @@ Utility functions shared across the application:
   - `send_error()`: Standardized error response generation
   - `allowed_file()`: File extension validation against allowed types
 
+- **image_utils.py**: Image processing utilities
+  - `get_image_dimensions()`: Extracts dimensions from image files
+
 ## API Endpoints
 
 ### Base API
 
 - **GET /**: Health check endpoint
-  - Response: `{"message": "Hello World"}`
+  - Response: Server status, timestamp, and database connectivity information
 
 ### Upload API
 
@@ -119,9 +153,43 @@ Utility functions shared across the application:
       ]
     }
     ```
-  - Error responses:
-    - 406 Not Acceptable: When no files are found in the request
-    - 415 Unsupported Media Type: When file type is not allowed
+
+- **GET /api/uploads**: Get paginated uploads
+  - Query Parameters:
+    - `page`: Page number (1-indexed, default 1)
+    - `limit`: Number of items per page (default 20, max 100)
+  - Response:
+    ```json
+    {
+      "data": [
+        {
+          "id": "60d21b4967d0d8992e610c85",
+          "original_name": "vacation.jpg",
+          "filename": "60d21b4967d0d8992e610c85.jpg",
+          "file_path": "/uploads/images/60d21b4967d0d8992e610c85.jpg",
+          "url": "http://example.com/uploads/images/60d21b4967d0d8992e610c85.jpg",
+          "upload_time": "2023-08-01",
+          "size": 1024000,
+          "dimensions": {
+            "width": 1920,
+            "height": 1080
+          },
+          "status": "pending",
+          "caption": "Beach vacation",
+          "tags": [],
+          "faces": [],
+          "face_cluster_ids": []
+        },
+        // ... more items ...
+      ],
+      "total": 42,
+      "page": 1,
+      "limit": 20
+    }
+    ```
+
+- **GET /api/uploads/{file_id}**: Get metadata for a specific file
+  - Returns the complete metadata for a specific file by its ID
 
 ## Configuration
 
@@ -131,11 +199,14 @@ Configuration is managed through the `app/config.py` file using Pydantic's BaseS
 
 - `BASE_DIR`: Base directory of the application
 - `UPLOAD_FOLDER`: Directory for storing uploaded files (default: `<BASE_DIR>/uploads`)
-- `ALLOWED_EXTENSIONS`: Set of allowed file extensions (default: 'png', 'jpg', 'jpeg', 'webp')
+- `ALLOWED_EXTENSIONS`: Set of allowed file extensions (default: 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff', 'tif')
 - `HOST`: Host address (default: '127.0.0.1')
 - `PORT`: Port number (default: 5000)
 - `RELOAD`: Auto-reload on code changes (default: True, ideal for development)
 - `UPLOAD_URL_PATH`: URL path to access uploaded files (default: '/uploads')
+- `MONGODB_URL`: MongoDB connection string (default: 'mongodb://localhost:27017')
+- `MONGODB_DATABASE`: MongoDB database name (default: 'clustr')
+- `MONGODB_UPLOADS_COLLECTION`: MongoDB collection for uploads (default: 'uploads')
 - `BASE_URL`: Computed property that returns the full base URL of the application
 
 ### Environment Variables
@@ -163,8 +234,10 @@ The file upload service (`app/services/upload_service.py`) handles the upload pr
 
 1. **Validation**: Checks if the file extensions are allowed using the `allowed_file()` utility function
 2. **Storage**: Securely saves files to the configured upload directory
-3. **URL Generation**: Creates preview URLs for accessing the files
-4. **Response Creation**: Returns metadata about each successfully uploaded file
+3. **Metadata Extraction**: Extracts image dimensions and other metadata using Pillow
+4. **MongoDB Storage**: Stores file metadata in MongoDB for later retrieval
+5. **URL Generation**: Creates preview URLs for accessing the files
+6. **Response Creation**: Returns metadata about each successfully uploaded file
 
 ### Security Considerations
 
@@ -314,6 +387,41 @@ Potential improvements for the application:
 4. Asynchronous processing for large files
 5. Cloud storage integration
 6. File deletion and management APIs
+
+## MongoDB Integration
+
+The application uses MongoDB to store metadata about uploaded files. This includes:
+
+1. **File Information**: Original filename, stored filename, file path, URL, etc.
+2. **Image Metadata**: Dimensions, size, and content type
+3. **Processing Status**: Status of any image processing (pending, processed, error)
+4. **Custom Metadata**: Captions, tags, and other user-provided information
+
+### MongoDB Service
+
+The `mongodb_service.py` provides an interface for interacting with MongoDB:
+
+- `save_upload_metadata()`: Saves file metadata to MongoDB
+- `get_upload_metadata()`: Retrieves metadata for a specific file
+- `get_all_uploads()`: Retrieves metadata for all uploaded files
+
+### Image Dimensions Extraction
+
+The application extracts dimensions from uploaded images using the Pillow library:
+
+1. When a file is uploaded, it's saved to the uploads directory
+2. The `get_image_dimensions()` function opens the image and extracts its dimensions
+3. The dimensions are stored in the MongoDB metadata
+4. This information can be used for image processing, thumbnails, or display purposes
+
+The application extracts image dimensions using the Pillow library, which has native support for these formats:
+- PNG (.png)
+- JPEG (.jpg, .jpeg)
+- WebP (.webp)
+- BMP (.bmp)
+- TIFF (.tiff, .tif)
+
+These formats were chosen because they are widely used and have robust support in Pillow without requiring additional plugins.
 
 ## MongoDB Setup
 

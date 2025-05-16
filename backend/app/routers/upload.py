@@ -1,7 +1,7 @@
-from fastapi import APIRouter, File, UploadFile, Form
+from fastapi import APIRouter, File, UploadFile, Form, Query
 from typing import List, Dict, Any
 from app.services.upload_service import upload_files_service
-from app.models.upload_models import UploadSuccess
+from app.models.upload_models import UploadSuccess, PaginatedUploadsResponse
 from app.services.mongodb_service import mongodb_service
 from app.utils.image_utils import get_image_dimensions
 import os
@@ -30,15 +30,23 @@ async def upload_files(files: List[UploadFile] = File(...)):
     return await upload_files_service(files)
 
 
-@router.get("/uploads", response_model=List[Dict[str, Any]])
-async def get_all_uploads():
+@router.get("/uploads", response_model=PaginatedUploadsResponse)
+async def get_all_uploads(
+    page: int = Query(1, ge=1, description="Page number, starting from 1"),
+    limit: int = Query(
+        20, ge=1, le=100, description="Number of items per page, max 100")
+):
     """
-    Get all uploads from the database.
+    Get uploads with pagination.
+
+    Parameters:
+    - page: The page number (1-indexed)
+    - limit: Number of items per page (max 100)
 
     Returns:
-    - List[Dict]: A list of all upload metadata objects from the database
+    - PaginatedUploadsResponse: A model containing paginated upload data
     """
-    return mongodb_service.get_all_uploads()
+    return mongodb_service.get_paginated_uploads(page, limit)
 
 
 @router.get("/uploads/{file_id}", response_model=Dict[str, Any])
@@ -57,48 +65,3 @@ async def get_upload(file_id: str):
         # If the file doesn't exist, FastAPI will automatically return a 404 response
         return {"error": "File not found"}
     return metadata
-
-
-@router.get("/debug/dimensions")
-async def debug_dimensions():
-    """
-    Debug endpoint to check image dimensions functionality.
-
-    Returns:
-    - Dict with debug information
-    """
-    results = []
-
-    # Try to get dimensions for some sample files in the uploads folder
-    upload_dir = settings.UPLOAD_FOLDER
-    try:
-        files = os.listdir(upload_dir)
-        for file in files[:5]:  # Limit to 5 files to avoid huge responses
-            file_path = os.path.join(upload_dir, file)
-            if os.path.isfile(file_path):
-                try:
-                    dimensions = get_image_dimensions(file_path)
-                    results.append({
-                        "file": file,
-                        "path": file_path,
-                        "exists": True,
-                        "dimensions": dimensions,
-                        "success": dimensions["width"] > 0 and dimensions["height"] > 0
-                    })
-                except Exception as e:
-                    results.append({
-                        "file": file,
-                        "path": file_path,
-                        "exists": True,
-                        "error": str(e)
-                    })
-    except Exception as e:
-        return {"error": str(e)}
-
-    return {
-        "uploads_folder": upload_dir,
-        "folder_exists": os.path.exists(upload_dir),
-        "file_count": len(os.listdir(upload_dir) if os.path.exists(upload_dir) else []),
-        "results": results,
-        "note": "If you're seeing zeros for AVIF dimensions, run 'pip install pillow-avif-plugin' and restart the server."
-    }

@@ -60,6 +60,16 @@ class DBUploadModel(BaseModel):
         }
 
 
+class PaginatedUploadsResponse(BaseModel):
+    """
+    Model representing a paginated response for uploads.
+    """
+    data: List[dict]
+    total: int
+    page: int
+    limit: int
+
+
 class UploadSuccess(BaseModel):
     """
     Model representing a successful upload response.

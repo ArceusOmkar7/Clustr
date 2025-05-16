@@ -12,11 +12,24 @@ def get_image_dimensions(file_path: str) -> Dict[str, int]:
     """
     Get the dimensions of an image file.
 
+    This function uses the Pillow (PIL) library to open an image and extract
+    its width and height. It includes proper error handling to ensure it
+    doesn't crash even if the image can't be processed.
+
+    The function supports all image formats that are natively supported by
+    Pillow, including:
+    - PNG (.png)
+    - JPEG (.jpg, .jpeg)
+    - WebP (.webp)
+    - BMP (.bmp)
+    - TIFF (.tiff, .tif)
+
     Args:
-        file_path: Path to the image file
+        file_path: Path to the image file to analyze
 
     Returns:
-        Dict containing width and height
+        Dict containing width and height as integers.
+        Returns {width: 0, height: 0} if the file doesn't exist or can't be processed.
     """
     try:
         # Check if file exists
@@ -33,6 +46,7 @@ def get_image_dimensions(file_path: str) -> Dict[str, int]:
                 "height": height
             }
     except Exception as e:
+        # Comprehensive error handling with detailed logging
         logger.error(f"Error getting dimensions for {file_path}: {str(e)}")
         logger.debug(traceback.format_exc())
         # Return default dimensions if the file cannot be opened

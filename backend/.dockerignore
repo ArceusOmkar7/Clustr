@@ -1,0 +1,35 @@
+# Docker ignore for backend service
+
+# Dockerfile itself
+Dockerfile
+
+# Readme files
+README.md
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.Python
+env/
+venv/
+
+# Local environment configuration files (if any, besides the main .env)
+.env.*.local
+
+# Test caches
+.pytest_cache/
+.mypy_cache/
+
+# Git files
+.git/
+.gitignore
+
+# Local uploads - the container will have its own empty uploads directory
+uploads/
+
+# Test files (often not needed in the final production image)
+test_mongodb.py

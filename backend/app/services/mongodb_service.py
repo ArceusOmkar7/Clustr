@@ -155,6 +155,40 @@ class MongoDBService:
                 f"Error retrieving paginated uploads from MongoDB: {str(e)}")
             return {"data": [], "total": 0, "page": page, "limit": limit}
 
+    def update_upload_metadata(self, file_id: str, update_data: Dict[str, Any]) -> bool:
+        """
+        Update specific fields of an upload's metadata in MongoDB.
+
+        Args:
+            file_id: The ID of the upload document to update.
+            update_data: A dictionary containing the fields to update and their new values.
+                         e.g., {\"caption\": \"A new caption\", \"status\": \"processed\"}
+
+        Returns:
+            bool: True if the update was successful, False otherwise.
+        """
+        if not self.is_connected:
+            logger.warning(
+                f"MongoDB is not connected, skipping metadata update for {file_id}")
+            return False
+
+        try:
+            result = self.uploads_collection.update_one(
+                {"id": file_id},
+                {"$set": update_data}
+            )
+            if result.matched_count == 0:
+                logger.warning(
+                    f"No document found with id {file_id} to update.")
+                return False
+            logger.info(
+                f"Successfully updated metadata for {file_id}. Modified count: {result.modified_count}")
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(
+                f"Error updating metadata for {file_id} in MongoDB: {str(e)}")
+            return False
+
 
 # Create a global instance of the MongoDB service
 mongodb_service = MongoDBService()

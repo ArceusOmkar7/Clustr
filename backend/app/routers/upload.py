@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, UploadFile, Form, Query
+from fastapi import APIRouter, File, UploadFile, Form, Query, BackgroundTasks
 from typing import List, Dict, Any
 from app.services.upload_service import upload_files_service
 from app.models.upload_models import UploadSuccess, PaginatedUploadsResponse
@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.post("/upload", response_model=UploadSuccess)
-async def upload_files(files: List[UploadFile] = File(...)):
+async def upload_files(files: List[UploadFile] = File(...), background_tasks: BackgroundTasks = BackgroundTasks()):
     """
     Upload one or more files to the server.
 
@@ -26,8 +26,9 @@ async def upload_files(files: List[UploadFile] = File(...)):
 
     This endpoint delegates the actual file processing to the upload_files_service function,
     keeping the router focused on defining the API structure instead of implementation details.
+    It now also handles initiating background tasks for processing like image captioning.
     """
-    return await upload_files_service(files)
+    return await upload_files_service(files, background_tasks)
 
 
 @router.get("/uploads", response_model=PaginatedUploadsResponse)

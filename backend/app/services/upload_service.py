@@ -1,4 +1,4 @@
-from fastapi import UploadFile
+from fastapi import UploadFile, BackgroundTasks  # Added BackgroundTasks
 from typing import List
 import os
 import shutil
@@ -10,15 +10,16 @@ from app.utils.image_utils import get_image_dimensions
 from app.models.upload_models import UploadSuccess, UploadResponse, DBUploadModel
 from app.services.mongodb_service import mongodb_service
 import logging
-from app.ml.caption_service import get_image_caption  # Added import
+# Import the new background task function
+from app.ml.caption_service import generate_caption_and_update_db
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
 
 
-async def upload_files_service(files: List[UploadFile]) -> UploadSuccess:
+async def upload_files_service(files: List[UploadFile], background_tasks: BackgroundTasks) -> UploadSuccess:
     """
-    Process and store uploaded files.
+    Process and store uploaded files, and initiate background captioning.
 
     This service function handles the complete business logic for file uploads:
     1. Validates that files were provided in the request
@@ -95,46 +96,52 @@ async def upload_files_service(files: List[UploadFile]) -> UploadSuccess:
                 f"Failed to get image dimensions for {filename}: {str(e)}")
             dimensions = {"width": 0, "height": 0}
 
-        # Get image caption from BLIP service
-        caption = None
-        try:
-            # Ensure file_path is absolute for the captioning service
-            absolute_file_path = os.path.abspath(file_path)
-            caption = await get_image_caption(absolute_file_path)
-            if caption:
-                logger.info(f"Caption for {filename}: {caption}")
-            else:
-                logger.warning(f"No caption received for {filename}")
-        except Exception as e:
-            logger.error(f"Failed to get caption for {filename}: {e}")
+        # Get image caption from BLIP service - THIS WILL NOW BE A BACKGROUND TASK
+        # caption = None # Removed direct captioning call
+        # try:
+        #     # Ensure file_path is absolute for the captioning service
+        #     absolute_file_path = os.path.abspath(file_path)
+        #     caption = await get_image_caption(absolute_file_path)
+        #     if caption:
+        #         logger.info(f"Caption for {filename}: {caption}")
+        #     else:
+        #         logger.warning(f"No caption received for {filename}")
+        # except Exception as e:
+        #     logger.error(f"Failed to get caption for {filename}: {e}")
 
         # Create comprehensive metadata for MongoDB storage
         upload_metadata = {
             "id": unique_id,
             "original_name": original_filename,
             "filename": filename,
-            # Storing relative path might be better if service runs in different env
             "file_path": file_path,
             "url": preview_url,
-            "upload_time": datetime.now(),  # Use timezone-aware datetime if possible
+            "upload_time": datetime.now(),
             "size": file.size,
             "dimensions": dimensions,
-            # Update status based on captioning
-            "status": "processed" if caption else "pending_caption",
-            "caption": caption,  # Store the caption
-            "tags": [],  # To be populated later
-            "faces": [],  # For future face detection
-            "face_cluster_ids": []  # For future face clustering
+            "status": "pending_caption",  # Initial status
+            "caption": None,  # Caption will be updated by background task
+            "tags": [],
+            "faces": [],
+            "face_cluster_ids": []
         }
 
-        # Save metadata to MongoDB with error handling
+        # Save initial metadata to MongoDB
         try:
             mongodb_service.save_upload_metadata(upload_metadata)
-            logger.info(f"Metadata saved to MongoDB for file: {filename}")
+            logger.info(
+                f"Initial metadata saved to MongoDB for file: {filename}, id: {unique_id}")
+            # Add captioning task to background
+            absolute_file_path = os.path.abspath(file_path)
+            background_tasks.add_task(
+                generate_caption_and_update_db, absolute_file_path, unique_id)
+            logger.info(
+                f"Added background task for captioning image_id: {unique_id}")
         except Exception as e:
-            # Log the error but continue processing
-            # This allows the application to work even if MongoDB isn't available
-            logger.error(f"Failed to save metadata to MongoDB: {str(e)}")
+            logger.error(
+                f"Failed to save metadata or add background task for {filename}: {str(e)}")
+            # Decide if you want to skip this file or handle error differently
+            continue
 
         # Add metadata about this file to our list of successfully uploaded files
         # This creates the response object that will be returned to the client

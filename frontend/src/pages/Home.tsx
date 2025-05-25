@@ -1,4 +1,3 @@
-import React from "react";
 import { UploadComponent } from "../components/UploadComponent";
 import type { UploadableFile } from "../types";
 

@@ -149,7 +149,7 @@ export function UploadComponent({ onUploadComplete }: ImageUploaderProps) {
         </div>
 
         {files.length > 0 && (
-          <div className="mt-6 space-y-4">
+          <div className="mt-6 space-y-4 max-h-[300px] overflow-y-auto">
             <h3 className="text-lg font-medium">Selected Files:</h3>
             {files.map((file) => (
               <div

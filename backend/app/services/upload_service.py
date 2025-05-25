@@ -10,6 +10,7 @@ from app.utils.image_utils import get_image_dimensions
 from app.models.upload_models import UploadSuccess, UploadResponse, DBUploadModel
 from app.services.mongodb_service import mongodb_service
 import logging
+from app.ml.caption_service import get_image_caption  # Added import
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -66,10 +67,20 @@ async def upload_files_service(files: List[UploadFile]) -> UploadSuccess:
         # Create full file path in the configured uploads directory
         file_path = os.path.join(settings.UPLOAD_FOLDER, filename)
 
+        # Ensure the UPLOAD_FOLDER exists
+        os.makedirs(settings.UPLOAD_FOLDER, exist_ok=True)
+
         # Save the file to the uploads directory
-        with open(file_path, "wb") as fb:
-            shutil.copyfileobj(file.file, fb)
+        try:
+            with open(file_path, "wb") as fb:
+                shutil.copyfileobj(file.file, fb)
             logger.info(f"File saved to {file_path}")
+        except Exception as e:
+            logger.error(
+                f"Failed to save file {original_filename} to {file_path}: {e}")
+            # Optionally, you might want to skip this file and continue with others
+            # or raise an HTTPException here if saving is critical.
+            continue  # Skip to the next file if saving failed
 
         # Create a fully qualified preview URL for the client to access the file
         # Example: "http://127.0.0.1:5000/uploads/image.jpg"
@@ -80,23 +91,39 @@ async def upload_files_service(files: List[UploadFile]) -> UploadSuccess:
             dimensions = get_image_dimensions(file_path)
             logger.info(f"Image dimensions for {filename}: {dimensions}")
         except Exception as e:
-            logger.error(f"Failed to get image dimensions: {str(e)}")
+            logger.error(
+                f"Failed to get image dimensions for {filename}: {str(e)}")
             dimensions = {"width": 0, "height": 0}
+
+        # Get image caption from BLIP service
+        caption = None
+        try:
+            # Ensure file_path is absolute for the captioning service
+            absolute_file_path = os.path.abspath(file_path)
+            caption = await get_image_caption(absolute_file_path)
+            if caption:
+                logger.info(f"Caption for {filename}: {caption}")
+            else:
+                logger.warning(f"No caption received for {filename}")
+        except Exception as e:
+            logger.error(f"Failed to get caption for {filename}: {e}")
 
         # Create comprehensive metadata for MongoDB storage
         upload_metadata = {
             "id": unique_id,
             "original_name": original_filename,
             "filename": filename,
+            # Storing relative path might be better if service runs in different env
             "file_path": file_path,
             "url": preview_url,
-            "upload_time": datetime.now(),
+            "upload_time": datetime.now(),  # Use timezone-aware datetime if possible
             "size": file.size,
             "dimensions": dimensions,
-            "status": "pending",  # Initial status, can be updated by processing
-            "caption": None,      # Can be populated later
-            "tags": [],           # Can be populated later
-            "faces": [],          # For future face detection
+            # Update status based on captioning
+            "status": "processed" if caption else "pending_caption",
+            "caption": caption,  # Store the caption
+            "tags": [],  # To be populated later
+            "faces": [],  # For future face detection
             "face_cluster_ids": []  # For future face clustering
         }
 

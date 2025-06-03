@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 async def generate_caption_and_update_db(image_path: str, image_id: str):
     """
-    Asynchronously generates a caption for the image and updates the database.
+    Asynchronously generates a caption and tags for the image and updates the database.
     This function is intended to be run as a background task.
 
     Args:
@@ -42,19 +42,24 @@ async def generate_caption_and_update_db(image_path: str, image_id: str):
                 response.raise_for_status()
                 data = response.json()
                 caption = data.get("caption")
+                # Extract tags, default to empty list
+                tags = data.get("tags", [])
                 logger.info(
                     f"Background task: Received caption for image_id: {image_id}: {caption}")
+                logger.info(
+                    f"Background task: Received tags for image_id: {image_id}: {tags}")
 
         if caption:
-            update_data = {"caption": caption, "status": "processed"}
+            update_data = {"caption": caption,
+                           "tags": tags, "status": "processed"}
             success = mongodb_service.update_upload_metadata(
                 image_id, update_data)
             if success:
                 logger.info(
-                    f"Successfully updated DB for image_id: {image_id} with caption.")
+                    f"Successfully updated DB for image_id: {image_id} with caption and tags.")
             else:
                 logger.error(
-                    f"Failed to update DB for image_id: {image_id} with caption.")
+                    f"Failed to update DB for image_id: {image_id} with caption and tags.")
         else:
             logger.warning(
                 f"Background task: No caption received for image_id: {image_id}. Status remains pending_caption or will be caption_failed.")
@@ -82,16 +87,16 @@ async def generate_caption_and_update_db(image_path: str, image_id: str):
 # For now, let's assume it might be useful for testing or other specific scenarios.
 
 
-async def get_image_caption(image_path: str) -> Optional[str]:
+async def get_image_caption_and_tags(image_path: str) -> Optional[dict]:
     """
-    Calls the BLIP image captioning microservice to get a caption for the given image.
+    Calls the BLIP image captioning microservice to get both caption and tags for the given image.
     This is a direct, synchronous call.
 
     Args:
         image_path: The absolute path to the image file on the host machine.
 
     Returns:
-        The generated caption string if successful, None otherwise.
+        A dictionary with 'caption' and 'tags' keys if successful, None otherwise.
     """
     if not os.path.exists(image_path):
         logger.error(f"Host image path does not exist: {image_path}")
@@ -107,13 +112,15 @@ async def get_image_caption(image_path: str) -> Optional[str]:
 
             async with httpx.AsyncClient() as client:
                 logger.info(
-                    f"Requesting caption for {image_path} (sending file) from {full_blip_url}")
+                    f"Requesting caption and tags for {image_path} (sending file) from {full_blip_url}")
                 response = await client.post(full_blip_url, files=files, timeout=60.0)
                 response.raise_for_status()
                 data = response.json()
                 caption = data.get("caption")
+                tags = data.get("tags", [])
                 logger.info(f"Received caption for {image_path}: {caption}")
-                return caption
+                logger.info(f"Received tags for {image_path}: {tags}")
+                return {"caption": caption, "tags": tags}
     except FileNotFoundError:
         logger.error(f"File not found at path: {image_path}")
     except httpx.RequestError as e:
@@ -121,17 +128,38 @@ async def get_image_caption(image_path: str) -> Optional[str]:
             f"HTTP request to BLIP service failed for {image_path}: {e}")
     except Exception as e:
         logger.error(
-            f"An unexpected error occurred while getting caption for {image_path}: {e}")
+            f"An unexpected error occurred while getting caption and tags for {image_path}: {e}")
     return None
+
+
+async def get_image_caption(image_path: str) -> Optional[str]:
+    """
+    Calls the BLIP image captioning microservice to get a caption for the given image.
+    This is a direct, synchronous call.
+
+    Args:
+        image_path: The absolute path to the image file on the host machine.
+
+    Returns:
+        The generated caption string if successful, None otherwise.
+    """
+    result = await get_image_caption_and_tags(image_path)
+    return result.get("caption") if result else None
 
 
 async def get_image_tags(image_path: str) -> list[str]:
     """
-    (Placeholder) In the future, this function will call a service to get tags for an image.
-    For now, it returns an empty list.
+    Calls the BLIP image captioning microservice to get tags for the given image.
+    This function now uses the BLIP service instead of being a placeholder.
+
+    Args:
+        image_path: The absolute path to the image file on the host machine.
+
+    Returns:
+        A list of tags for the image if successful, empty list otherwise.
     """
-    logger.info(f"Tag generation not yet implemented for {image_path}.")
-    return []
+    result = await get_image_caption_and_tags(image_path)
+    return result.get("tags", []) if result else []
 
 
 async def detect_faces(image_path: str) -> list[dict]:

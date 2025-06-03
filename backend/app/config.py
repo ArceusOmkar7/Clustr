@@ -43,7 +43,6 @@ class Settings(BaseSettings):
     MONGODB_UPLOADS_COLLECTION: str = "uploads"
 
     # BLIP Captioning Service Base URL
-    # Changed from BLIP_SERVICE_URL to BLIP_BASE_URL
     BLIP_BASE_URL: str = "http://localhost:8000"
 
     @property

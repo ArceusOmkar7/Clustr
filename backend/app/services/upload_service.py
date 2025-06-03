@@ -12,6 +12,7 @@ from app.services.mongodb_service import mongodb_service
 import logging
 # Import the new background task function
 from app.ml.caption_service import generate_caption_and_update_db
+from app.ml.batch_caption_service import queue_batch_caption_background_task
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -46,10 +47,12 @@ async def upload_files_service(files: List[UploadFile], background_tasks: Backgr
     # Validate that files were provided
     if not files:
         # Use the helper function to raise a standardized HTTP error
+        # List to collect information about successfully uploaded files
         send_error("No files found in request", 406)
-
-    # List to collect information about successfully uploaded files
     uploaded_files = []
+
+    # List to collect batch caption requests for efficient processing
+    batch_caption_requests = []
 
     # Process each file in the request
     for file in files:
@@ -124,22 +127,20 @@ async def upload_files_service(files: List[UploadFile], background_tasks: Backgr
             "tags": [],
             "faces": [],
             "face_cluster_ids": []
-        }
-
-        # Save initial metadata to MongoDB
+        }        # Save initial metadata to MongoDB
         try:
             mongodb_service.save_upload_metadata(upload_metadata)
             logger.info(
                 f"Initial metadata saved to MongoDB for file: {filename}, id: {unique_id}")
-            # Add captioning task to background
+
+            # Collect for batch processing instead of individual background tasks
             absolute_file_path = os.path.abspath(file_path)
-            background_tasks.add_task(
-                generate_caption_and_update_db, absolute_file_path, unique_id)
-            logger.info(
-                f"Added background task for captioning image_id: {unique_id}")
+            batch_caption_requests.append(
+                (unique_id, absolute_file_path, original_filename))
+
         except Exception as e:
             logger.error(
-                f"Failed to save metadata or add background task for {filename}: {str(e)}")
+                f"Failed to save metadata for {filename}: {str(e)}")
             # Decide if you want to skip this file or handle error differently
             continue
 
@@ -149,9 +150,24 @@ async def upload_files_service(files: List[UploadFile], background_tasks: Backgr
             stored_filename=filename,
             original_filename=original_filename,
             file_size=file.size,
-            preview_url=preview_url,
-            content_type=file.content_type
+            preview_url=preview_url,            content_type=file.content_type
         ))
+
+    # Process captioning in batch if multiple images were uploaded
+    if batch_caption_requests:
+        if len(batch_caption_requests) == 1:
+            # Single image - use individual processing for faster response
+            unique_id, absolute_file_path, _ = batch_caption_requests[0]
+            background_tasks.add_task(
+                generate_caption_and_update_db, absolute_file_path, unique_id)
+            logger.info(
+                f"Added individual caption task for image_id: {unique_id}")
+        else:
+            # Multiple images - use batch processing for efficiency
+            background_tasks.add_task(
+                queue_batch_caption_background_task, batch_caption_requests)
+            logger.info(
+                f"Added batch caption task for {len(batch_caption_requests)} images")
 
     # Return a success response with information about all uploaded files
     return UploadSuccess(

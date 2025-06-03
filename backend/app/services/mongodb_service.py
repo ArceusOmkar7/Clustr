@@ -189,6 +189,117 @@ class MongoDBService:
                 f"Error updating metadata for {file_id} in MongoDB: {str(e)}")
             return False
 
+    def find_uncaptioned_images(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Find images that don't have captions yet.
+
+        Args:
+            limit: Maximum number of images to return
+
+        Returns:
+            List of image metadata for uncaptioned images
+        """
+        if not self.is_connected:
+            logger.warning(
+                "MongoDB is not connected, cannot find uncaptioned images")
+            return []
+
+        try:
+            # Find images where caption is None, empty, or status indicates no caption
+            query = {
+                "$or": [
+                    {"caption": {"$exists": False}},
+                    {"caption": None},
+                    {"caption": ""},
+                    {"status": {"$in": ["pending_caption", "caption_failed_file_not_found",
+                                        "caption_failed_http_error", "caption_failed_unexpected"]}}
+                ]
+            }
+
+            uncaptioned = list(self.uploads_collection
+                               .find(query, {'_id': 0})
+                               .sort("upload_time", 1)  # Oldest first
+                               .limit(limit))
+
+            logger.info(f"Found {len(uncaptioned)} uncaptioned images")
+            return uncaptioned
+
+        except Exception as e:
+            logger.error(f"Error finding uncaptioned images: {str(e)}")
+            return []
+
+    def get_caption_statistics(self) -> Dict[str, Any]:
+        """
+        Get statistics about caption status across all images.
+
+        Returns:
+            Dictionary with caption statistics
+        """
+        if not self.is_connected:
+            logger.warning(
+                "MongoDB is not connected, cannot get caption statistics")
+            return {
+                "total_images": 0,
+                "captioned": 0,
+                "uncaptioned": 0,
+                "processing": 0,
+                "failed": 0,
+                "status_breakdown": {}
+            }
+
+        try:
+            # Get total count
+            total = self.uploads_collection.count_documents({})
+
+            # Count captioned images (have non-empty caption)
+            captioned = self.uploads_collection.count_documents({
+                "caption": {"$exists": True, "$ne": None, "$ne": ""}
+            })
+
+            # Count processing images
+            processing = self.uploads_collection.count_documents({
+                "status": {"$in": ["pending_caption", "processing_caption"]}
+            })
+
+            # Count failed images
+            failed = self.uploads_collection.count_documents({
+                "status": {"$regex": "caption_failed"}
+            })
+
+            # Get status breakdown
+            status_pipeline = [
+                {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+                {"$sort": {"count": -1}}
+            ]
+
+            status_breakdown = {}
+            for result in self.uploads_collection.aggregate(status_pipeline):
+                status_breakdown[result["_id"]] = result["count"]
+
+            uncaptioned = total - captioned
+
+            return {
+                "total_images": total,
+                "captioned": captioned,
+                "uncaptioned": uncaptioned,
+                "processing": processing,
+                "failed": failed,
+                "status_breakdown": status_breakdown,
+                "caption_percentage": round((captioned / total * 100) if total > 0 else 0, 2)
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting caption statistics: {str(e)}")
+            return {
+                "total_images": 0,
+                "captioned": 0,
+                "uncaptioned": 0,
+                "processing": 0,
+                "failed": 0,
+                "status_breakdown": {},
+                "error": str(e)
+            }
+
 
 # Create a global instance of the MongoDB service
 mongodb_service = MongoDBService()

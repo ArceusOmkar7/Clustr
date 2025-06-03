@@ -35,6 +35,9 @@ backend/
 │   │   ├── __init__.py
 │   │   ├── mongodb_service.py # MongoDB service implementation
 │   │   └── upload_service.py  # Upload service implementation
+│   ├── ml/                  # Machine learning services
+│   │   ├── __init__.py
+│   │   └── caption_service.py # Image captioning and tagging service
 │   └── utils/               # Helper functions
 │       ├── __init__.py
 │       ├── helpers.py       # Utility functions (file validation, error handling)
@@ -99,6 +102,24 @@ Service modules contain the business logic:
   - Validates file types against allowed extensions
   - Securely saves files to the upload directory
   - Extracts image dimensions
+  - Stores metadata in MongoDB
+  - Generates preview URLs
+  - Returns structured metadata about the uploaded files
+
+- **mongodb_service.py**: Handles database operations
+  - Provides methods to save, retrieve, and query file metadata
+  - Error handling for database operations
+
+### ML Services (app/ml/)
+
+Machine learning and AI-powered services:
+
+- **caption_service.py**: Integrates with BLIP Captioner service for AI-powered image analysis
+  - Generates captions and tags for uploaded images
+  - Supports both individual caption/tag retrieval and combined operations
+  - Handles background processing of images through BLIP service
+  - Updates database with generated captions and tags
+  - Error handling for ML service failures
   - Stores metadata in MongoDB
   - Generates preview URLs
   - Returns structured metadata about the uploaded files
@@ -191,6 +212,60 @@ Utility functions shared across the application:
 - **GET /api/uploads/{file_id}**: Get metadata for a specific file
   - Returns the complete metadata for a specific file by its ID
 
+## BLIP Service Integration
+
+The Clustr backend integrates with the BLIP Captioner service to provide AI-powered image captioning and tagging functionality. This service analyzes uploaded images and generates both descriptive captions and relevant tags.
+
+### Caption Service Features
+
+The `app/ml/caption_service.py` module provides the following functionality:
+
+- **Automatic Caption Generation**: Uses BLIP-2 model to generate descriptive captions for uploaded images
+- **Tag Generation**: Extracts relevant tags that describe the content, objects, and scenes in images
+- **Background Processing**: Handles image analysis asynchronously to avoid blocking upload operations
+- **Database Integration**: Automatically updates MongoDB with generated captions and tags
+
+### Available Functions
+
+- `generate_caption_and_update_db(image_id, image_path)`: Sends image to BLIP service and updates database with both caption and tags
+- `get_image_caption(image_id)`: Retrieves caption for a specific image (generates if not available)
+- `get_image_tags(image_id)`: Retrieves tags for a specific image (generates if not available)
+- `get_image_caption_and_tags(image_id)`: Retrieves both caption and tags in a single operation
+
+### BLIP Service Requirements
+
+To use the caption and tagging functionality, you need to have the BLIP Captioner service running:
+
+1. **BLIP Service URL**: Configure the `BLIP_SERVICE_URL` environment variable to point to your BLIP service instance
+2. **Service Response Format**: The BLIP service should return JSON responses with the following structure:
+   ```json
+   {
+     "caption": "A descriptive caption of the image",
+     "tags": ["tag1", "tag2", "tag3", ...]
+   }
+   ```
+
+### Usage Example
+
+The caption service is automatically triggered during the upload process. Images are processed in the background, and their metadata is updated with captions and tags. You can also manually retrieve this information:
+
+```python
+from app.ml.caption_service import get_image_caption_and_tags
+
+# Get both caption and tags for an image
+result = await get_image_caption_and_tags("image_id_here")
+print(f"Caption: {result['caption']}")
+print(f"Tags: {result['tags']}")
+```
+
+### Error Handling
+
+The caption service includes robust error handling:
+- Network failures when connecting to BLIP service
+- Invalid image formats or corrupted files
+- Service timeouts and response validation
+- Graceful degradation when ML services are unavailable
+
 ## Configuration
 
 Configuration is managed through the `app/config.py` file using Pydantic's BaseSettings. This provides type validation and automatic loading from environment variables.
@@ -207,6 +282,7 @@ Configuration is managed through the `app/config.py` file using Pydantic's BaseS
 - `MONGODB_URL`: MongoDB connection string (default: 'mongodb://localhost:27017')
 - `MONGODB_DATABASE`: MongoDB database name (default: 'clustr')
 - `MONGODB_UPLOADS_COLLECTION`: MongoDB collection for uploads (default: 'uploads')
+- `BLIP_SERVICE_URL`: URL for the BLIP Captioner service (default: 'http://localhost:8001')
 - `BASE_URL`: Computed property that returns the full base URL of the application
 
 ### Environment Variables
@@ -226,6 +302,9 @@ UPLOAD_FOLDER=/path/to/custom/storage
 MONGODB_URL=mongodb://localhost:27017
 MONGODB_DATABASE=clustr
 MONGODB_UPLOADS_COLLECTION=uploads
+
+# BLIP Service configuration
+BLIP_SERVICE_URL=http://localhost:8001
 ```
 
 ## File Upload Service Implementation
@@ -275,6 +354,16 @@ Uploaded files are stored in the `uploads/` directory and served as static files
 - Python 3.8 or higher
 - pip (Python package manager)
 - Virtual environment tool (venv, virtualenv, or conda)
+- MongoDB instance (local or remote)
+- BLIP Captioner service (for AI-powered captions and tags)
+
+### External Service Dependencies
+
+**BLIP Captioner Service**: The application integrates with a separate BLIP service for AI-powered image analysis. This service should be running and accessible at the configured URL before using caption/tag functionality.
+
+- Repository: [BLIP Captioner](https://github.com/yourusername/BLIP-Captioner)
+- Default URL: http://localhost:8001
+- Required endpoints: `/caption` (POST) for image analysis
 
 ### Installation
 
@@ -387,6 +476,10 @@ Potential improvements for the application:
 4. Asynchronous processing for large files
 5. Cloud storage integration
 6. File deletion and management APIs
+7. Face detection and clustering enhancements
+8. Advanced image search capabilities using generated tags
+9. Batch processing for multiple images
+10. Custom ML model integration beyond BLIP
 
 ## MongoDB Integration
 
@@ -395,7 +488,8 @@ The application uses MongoDB to store metadata about uploaded files. This includ
 1. **File Information**: Original filename, stored filename, file path, URL, etc.
 2. **Image Metadata**: Dimensions, size, and content type
 3. **Processing Status**: Status of any image processing (pending, processed, error)
-4. **Custom Metadata**: Captions, tags, and other user-provided information
+4. **AI-Generated Content**: Captions and tags generated by the BLIP service
+5. **Custom Metadata**: Face detection data, cluster IDs, and other analysis results
 
 ### MongoDB Service
 
@@ -404,6 +498,7 @@ The `mongodb_service.py` provides an interface for interacting with MongoDB:
 - `save_upload_metadata()`: Saves file metadata to MongoDB
 - `get_upload_metadata()`: Retrieves metadata for a specific file
 - `get_all_uploads()`: Retrieves metadata for all uploaded files
+- Database operations for updating captions, tags, and processing status
 
 ### Image Dimensions Extraction
 

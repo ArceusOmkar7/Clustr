@@ -3,6 +3,7 @@ from typing import Dict, Tuple
 import logging
 import os
 import traceback
+from io import BytesIO
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -54,3 +55,45 @@ def get_image_dimensions(file_path: str) -> Dict[str, int]:
             "width": 0,
             "height": 0
         }
+
+
+def create_thumbnail(file_path: str, max_size: int = 300, quality: int = 85) -> bytes:
+    """
+    Create a thumbnail from an image file.
+
+    Args:
+        file_path: Path to the source image
+        max_size: Maximum dimension for the thumbnail
+        quality: JPEG quality (1-100)
+
+    Returns:
+        bytes: JPEG thumbnail data
+    """
+    try:
+        with Image.open(file_path) as img:
+            # Convert to RGB if necessary (for PNG with transparency, etc.)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                # Convert to RGB, using white background for transparency
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()
+                                 [-1] if img.mode in ('RGBA', 'LA') else None)
+                img = background
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+
+            # Calculate thumbnail size maintaining aspect ratio
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+            # Save to bytes buffer
+            buffer = BytesIO()
+            img.save(buffer, format='JPEG', quality=quality, optimize=True)
+
+            logger.info(f"Created thumbnail for {file_path}: {img.size}")
+            return buffer.getvalue()
+
+    except Exception as e:
+        logger.error(f"Error creating thumbnail for {file_path}: {str(e)}")
+        logger.debug(traceback.format_exc())
+        raise

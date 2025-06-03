@@ -11,6 +11,7 @@ export interface ImageMetadata {
   filename: string; // Stored filename on the server
   file_path: string; // Path where the file is stored on the server
   url: string; // Full URL to access the image
+  thumbnail_url?: string; // URL for thumbnail version
   upload_time: string; // When the image was uploaded
   size: number; // File size in bytes
   dimensions?: {
@@ -43,8 +44,7 @@ export const galleryService = {
    * @param page - Page number (1-indexed)
    * @param limit - Number of items per page
    * @returns Promise with paginated image data
-   */
-  getUploads: async (
+   */ getUploads: async (
     page: number = 1,
     limit: number = 20
   ): Promise<GetUploadsResponse> => {
@@ -53,8 +53,21 @@ export const galleryService = {
         page,
         limit,
       },
-    });
+    }); // Add thumbnail URLs to the response data
+    const baseURL = `${
+      import.meta.env.VITE_BACKEND_URL || "http://localhost"
+    }:${import.meta.env.VITE_BACKEND_PORT || "8000"}`;
 
-    return response.data;
+    const dataWithThumbnails = response.data.data.map(
+      (image: ImageMetadata) => ({
+        ...image,
+        thumbnail_url: `${baseURL}/api/uploads/${image.id}/thumbnail?size=300`,
+      })
+    );
+
+    return {
+      ...response.data,
+      data: dataWithThumbnails,
+    };
   },
 };

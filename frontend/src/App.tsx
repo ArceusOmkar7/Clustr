@@ -9,9 +9,9 @@ import Health from "./pages/Health";
 function App() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="clustr-theme">
-      <div className="flex flex-col min-h-screen bg-background text-foreground">
+      <div className="flex flex-col h-screen bg-background text-foreground">
         <Navbar />
-        <main className="flex-grow overflow-y-auto">
+        <main className="flex-1 overflow-hidden">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/gallery" element={<Gallery />} />

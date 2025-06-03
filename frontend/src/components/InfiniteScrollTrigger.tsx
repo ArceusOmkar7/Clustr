@@ -22,7 +22,6 @@ export function InfiniteScrollTrigger({
 }: InfiniteScrollTriggerProps) {
   // Reference to the DOM element we want to observe
   const triggerRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     // Skip setup if the trigger is disabled
     if (disabled) return;
@@ -38,7 +37,7 @@ export function InfiniteScrollTrigger({
       },
       {
         root: null, // Use the viewport as the root
-        rootMargin: "0px", // No margin around the root
+        rootMargin: "200px", // Load more content when user is 200px away from trigger
         threshold: 0.1, // Trigger when at least 10% of the element is visible
       }
     );

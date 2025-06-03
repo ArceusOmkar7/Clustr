@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.routers import base, upload, ml
+from app.routers import base, upload, ml, health
 from app.config import settings
 from app.db.mongodb import init_mongodb
 from pathlib import Path
@@ -57,6 +57,8 @@ app.mount(settings.UPLOAD_URL_PATH, StaticFiles(
 # base router: Basic endpoints like health check ("/")
 # upload router: File upload endpoints ("/api/upload")
 # ml router: Machine learning endpoints ("/api/ml")
+# health router: Health check endpoints ("/api/health")
 app.include_router(base.router)
 app.include_router(upload.router, prefix="/api")
 app.include_router(ml.router, prefix="/api/ml")
+app.include_router(health.router, prefix="/api")

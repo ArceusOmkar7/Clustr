@@ -4,6 +4,7 @@ import { ThemeProvider } from "./components/theme-provider";
 import { Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import Gallery from "./pages/Gallery";
+import Health from "./pages/Health";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/gallery" element={<Gallery />} />
+            <Route path="/health" element={<Health />} />
           </Routes>
         </main>
       </div>

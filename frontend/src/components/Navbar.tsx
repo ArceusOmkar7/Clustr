@@ -5,10 +5,10 @@ import { cn } from "../lib/utils";
 
 const Navbar = () => {
   const location = useLocation();
-
   const navLinks = [
     { to: "/", label: "Home" },
     { to: "/gallery", label: "Gallery" },
+    { to: "/health", label: "Health" },
   ];
 
   return (
